@@ -16,14 +16,14 @@ User=root
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 # Absolute path to your deployment directory.
-WorkingDirectory=/var/www/asterisk-integrations
+WorkingDirectory=/var/www/html/Asterisk-Integrations
 
 # PHP binary path — find yours with:  which php   OR   whereis php
 # Common paths:
 #   /usr/bin/php
 #   /usr/local/bin/php
 #   /usr/bin/php8.1
-ExecStart=/usr/bin/env php /var/www/asterisk-integrations/service.php
+ExecStart=/usr/bin/env php /var/www/html/Asterisk-Integrations/service.php
 
 # ── Restart policy ────────────────────────────────────────────────────────────
 Restart=always

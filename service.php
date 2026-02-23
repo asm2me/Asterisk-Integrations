@@ -56,8 +56,9 @@ if (function_exists('pcntl_signal')) {
 
 $notify = static function (string $url, array $data) use ($http, $logger): void {
     $logger->debug("CRM notify → {$url}");
+    $logger->debug('Payload: ' . json_encode($data));
     try {
-        $result = $http->post($url, $data);
+        $result = $http->postJson($url, $data);
         if ($result['success']) {
             $logger->debug("CRM notify OK (HTTP {$result['status']})");
         } else {
