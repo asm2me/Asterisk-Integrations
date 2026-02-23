@@ -59,7 +59,7 @@ class AsteriskEventListener
      * @param  callable        $handler fn(array $event): void
      * @return $this
      */
-    public function on(string|array $events, callable $handler): static
+    public function on($events, callable $handler): self
     {
         foreach ((array) $events as $event) {
             if ($event === '*') {
@@ -219,7 +219,7 @@ class AsteriskEventListener
                 return empty($packet) ? null : $packet;
             }
 
-            if (str_contains($line, ':')) {
+            if (strpos($line, ':') !== false) {
                 [$key, $value]     = explode(':', $line, 2);
                 $packet[trim($key)] = trim($value);
             }

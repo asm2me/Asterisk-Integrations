@@ -210,7 +210,7 @@ class CallbackHandler
 
         // Also try a JSON body (some Asterisk AGI scripts POST JSON).
         $body = file_get_contents('php://input');
-        if ($body && str_contains((string) ($_SERVER['CONTENT_TYPE'] ?? ''), 'application/json')) {
+        if ($body && strpos((string) ($_SERVER['CONTENT_TYPE'] ?? ''), 'application/json') !== false) {
             $decoded = json_decode($body, true);
             if (is_array($decoded)) {
                 $payload = array_merge($payload, $decoded);

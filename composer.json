@@ -3,7 +3,7 @@
     "description": "Standalone PHP module for Asterisk / ViciDial CRM integration",
     "type": "library",
     "require": {
-        "php": ">=8.0",
+        "php": ">=7.4",
         "ext-curl": "*",
         "ext-json": "*"
     },

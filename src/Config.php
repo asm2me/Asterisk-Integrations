@@ -34,7 +34,7 @@ class Config
      * @param  mixed  $default Returned when the key is not set.
      * @return mixed
      */
-    public function get(string $key, mixed $default = null): mixed
+    public function get(string $key, $default = null)
     {
         return $this->data[$key] ?? $default;
     }
