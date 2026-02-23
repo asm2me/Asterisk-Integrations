@@ -1,0 +1,19 @@
+# Composer
+/vendor/
+composer.lock
+
+# Local config override (contains real credentials)
+config.local.php
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
