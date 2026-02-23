@@ -20,12 +20,17 @@ return [
     // The "source" parameter sent on every /connect/functions.php request.
     'source'   => 'Mani',
 
-    // ── HTTP client (ViciDial) ────────────────────────────────────────────────
+    // ── HTTP client (ViciDial / CRM callbacks) ───────────────────────────────
     // Total request timeout in seconds.
     'timeout'         => 30,
 
     // Connection timeout in seconds.
     'connect_timeout' => 10,
+
+    // Verify SSL certificates on HTTPS requests.
+    // Set to false when the CRM uses a self-signed or internally-issued certificate
+    // (e.g. error 60: SSL certificate problem: EE certificate key too weak).
+    'ssl_verify' => false,
 
     // ── Asterisk Manager Interface (AMI) ──────────────────────────────────────
     // Host for the AMI socket (defaults to 'server' above if not set).

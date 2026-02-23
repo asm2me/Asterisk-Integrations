@@ -7,14 +7,16 @@ namespace Asterisk\Integration;
  */
 class ViciDialClient
 {
-    private int $timeout;
-    private int $connectTimeout;
+    private int  $timeout;
+    private int  $connectTimeout;
+    private bool $sslVerify;
 
     public function __construct(?Config $config = null)
     {
         $config               = $config ?? new Config();
-        $this->timeout        = (int) $config->get('timeout', 30);
-        $this->connectTimeout = (int) $config->get('connect_timeout', 10);
+        $this->timeout        = (int)  $config->get('timeout', 30);
+        $this->connectTimeout = (int)  $config->get('connect_timeout', 10);
+        $this->sslVerify      = (bool) $config->get('ssl_verify', true);
     }
 
     /**
@@ -31,12 +33,14 @@ class ViciDialClient
         $payload = json_encode(['user' => $data]);
 
         curl_setopt_array($ch, [
-            CURLOPT_POST           => true,
-            CURLOPT_POSTFIELDS     => $payload,
-            CURLOPT_HTTPHEADER     => ['Content-Type: application/json'],
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_TIMEOUT        => $this->timeout,
-            CURLOPT_CONNECTTIMEOUT => $this->connectTimeout,
+            CURLOPT_POST            => true,
+            CURLOPT_POSTFIELDS      => $payload,
+            CURLOPT_HTTPHEADER      => ['Content-Type: application/json'],
+            CURLOPT_RETURNTRANSFER  => true,
+            CURLOPT_TIMEOUT         => $this->timeout,
+            CURLOPT_CONNECTTIMEOUT  => $this->connectTimeout,
+            CURLOPT_SSL_VERIFYPEER  => $this->sslVerify,
+            CURLOPT_SSL_VERIFYHOST  => $this->sslVerify ? 2 : 0,
         ]);
 
         $result = curl_exec($ch);
