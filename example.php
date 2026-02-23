@@ -1,27 +1,25 @@
 <?php
 
 /**
- * AsteriskIntegration – usage example.
+ * AsteriskIntegration – standalone usage example.
  *
- * In a Laravel project:
- *   require_once __DIR__ . '/vendor/autoload.php';
- *
- * Or, if you embed this module inside an existing project with Composer,
- * just ensure the PSR-4 autoloader picks up Asterisk\Integration\*.
+ * No framework required. Just load the two classes and go.
  */
 
-require_once __DIR__ . '/vendor/autoload.php';
+require_once __DIR__ . '/src/Config.php';
+require_once __DIR__ . '/src/ViciDialClient.php';
+require_once __DIR__ . '/src/AsteriskIntegration.php';
 
 use Asterisk\Integration\AsteriskIntegration;
+use Asterisk\Integration\Config;
 
-// ── 1. Initialise with the branch server IP ──────────────────────────────────
+// ── 1. Load config (config.php defaults + any overrides) ─────────────────────
 
-$server = '192.168.1.100';           // equivalent to Auth::user()->branch->branch_ip
-$asterisk = new AsteriskIntegration($server);
+$config   = new Config(['server' => '192.168.1.100']);   // override just the server
+$asterisk = new AsteriskIntegration($config);
 
 // ── 2. Auth URL (opens ViciDial agent panel in a new tab) ────────────────────
 
-// User credentials – in Laravel these come from Auth::user()
 $user = [
     'ext'           => '8001',
     'ext_password'  => 'secret123',
@@ -31,7 +29,7 @@ $user = [
 ];
 
 $onload = $asterisk->getAuthOnload($user);
-// Output:  onload="window.open('http://192.168.1.100/agc/vicidial.php?...', '_blank');"
+// onload="window.open('http://192.168.1.100/agc/vicidial.php?...', '_blank');"
 echo $onload . PHP_EOL;
 
 // ── 3. Place an outbound call ────────────────────────────────────────────────
@@ -42,13 +40,13 @@ $phone     = '0501234567';
 $result = $asterisk->callClient($phone, $agentUser);
 // $result['success']  – true/false
 // $result['status']   – HTTP status code
-// $result['response'] – raw response body from ViciDial
-// $result['data']     – array of parameters sent
+// $result['response'] – raw ViciDial response body
+// $result['data']     – parameters that were sent
 echo 'callClient: ' . ($result['success'] ? 'OK' : 'FAILED') . PHP_EOL;
 
 // ── 4. Hold the active call ──────────────────────────────────────────────────
 
-$phonePass = 'secret123';     // Auth::user()->ext_password
+$phonePass = 'secret123';
 
 $result = $asterisk->holdClient($agentUser, $phonePass);
 echo 'holdClient: ' . ($result['success'] ? 'OK' : 'FAILED') . PHP_EOL;

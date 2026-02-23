@@ -15,16 +15,21 @@ namespace Asterisk\Integration;
 class AsteriskIntegration
 {
     private string $server;
+    private string $protocol;
+    private string $source;
     private ViciDialClient $client;
 
     /**
-     * @param string           $server  IP or hostname of the Asterisk/ViciDial server.
-     * @param ViciDialClient|null $client Inject a custom client (useful for testing).
+     * @param Config|null         $config  Pass overrides or null to use config.php defaults.
+     * @param ViciDialClient|null $client  Inject a custom client (useful for testing).
      */
-    public function __construct(string $server, ?ViciDialClient $client = null)
+    public function __construct(?Config $config = null, ?ViciDialClient $client = null)
     {
-        $this->server = $server;
-        $this->client = $client ?? new ViciDialClient();
+        $config         = $config ?? new Config();
+        $this->server   = (string) $config->get('server');
+        $this->protocol = (string) $config->get('protocol', 'http');
+        $this->source   = (string) $config->get('source', 'Mani');
+        $this->client   = $client ?? new ViciDialClient($config);
     }
 
     // -------------------------------------------------------------------------
@@ -43,7 +48,7 @@ class AsteriskIntegration
      *   voip_login: string,
      *   voip_password: string,
      *   campaign: string
-     * } $user  User credential fields (mirrors Auth::user() properties).
+     * } $user  Agent credential fields.
      * @return string The full URL ready to be opened in a browser tab.
      */
     public function getAuthUrl(array $user): string
@@ -56,7 +61,7 @@ class AsteriskIntegration
             'VD_campaign' => $user['campaign'],
         ]);
 
-        return "http://{$this->server}/agc/vicidial.php?{$params}";
+        return "{$this->protocol}://{$this->server}/agc/vicidial.php?{$params}";
     }
 
     /**
@@ -187,7 +192,7 @@ class AsteriskIntegration
      */
     private function buildFunctionUrl(array $params): string
     {
-        $query = http_build_query(array_merge(['source' => 'Mani'], $params));
-        return "http://{$this->server}/connect/functions.php?{$query}";
+        $query = http_build_query(array_merge(['source' => $this->source], $params));
+        return "{$this->protocol}://{$this->server}/connect/functions.php?{$query}";
     }
 }

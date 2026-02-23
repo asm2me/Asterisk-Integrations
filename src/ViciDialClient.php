@@ -10,10 +10,11 @@ class ViciDialClient
     private int $timeout;
     private int $connectTimeout;
 
-    public function __construct(int $timeout = 30, int $connectTimeout = 10)
+    public function __construct(?Config $config = null)
     {
-        $this->timeout        = $timeout;
-        $this->connectTimeout = $connectTimeout;
+        $config               = $config ?? new Config();
+        $this->timeout        = (int) $config->get('timeout', 30);
+        $this->connectTimeout = (int) $config->get('connect_timeout', 10);
     }
 
     /**
