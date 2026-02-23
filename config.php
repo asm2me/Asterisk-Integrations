@@ -53,4 +53,15 @@ return [
     // Full URL: <callback_base_url>/call_hangup/<mobile>
     'hangup_callback_path' => 'call_hangup',
 
+    // ── Logging ───────────────────────────────────────────────────────────────
+    // Directory where daily log files are written.
+    // File name pattern: service-YYYY-MM-DD.log
+    'log_dir' => __DIR__ . '/logs',
+
+    // Minimum level to record: DEBUG | INFO | WARNING | ERROR
+    'log_level' => 'INFO',
+
+    // Also write every log entry to stdout (captured by systemd/journald).
+    'log_to_stdout' => true,
+
 ];

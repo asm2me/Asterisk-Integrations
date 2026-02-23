@@ -16,27 +16,35 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/src/Config.php';
+require_once __DIR__ . '/src/Logger.php';
 require_once __DIR__ . '/src/ViciDialClient.php';
 require_once __DIR__ . '/src/AsteriskEventListener.php';
 
 use Asterisk\Integration\AsteriskEventListener;
 use Asterisk\Integration\Config;
+use Asterisk\Integration\Logger;
 use Asterisk\Integration\ViciDialClient;
 
 // ── 1. Bootstrap ─────────────────────────────────────────────────────────────
 
-$config   = new Config();                  // reads config.php
-$http     = new ViciDialClient($config);   // reused for CRM notifications
-$listener = new AsteriskEventListener($config);
+$config   = new Config();
+$logger   = new Logger($config);
+$http     = new ViciDialClient($config);
+$listener = new AsteriskEventListener($config, $logger);
 
-$crmBase     = rtrim((string) $config->get('callback_base_url', ''), '/');
+$crmBase      = rtrim((string) $config->get('callback_base_url', ''), '/');
 $incomingPath = (string) $config->get('incoming_callback_path', 'search_income_calls');
 $hangupPath   = (string) $config->get('hangup_callback_path', 'call_hangup');
+
+$logger->info('Asterisk Integration service initialised.');
+$logger->info("CRM base URL : {$crmBase}");
+$logger->info("AMI host     : " . $config->get('ami_host', $config->get('server')) . ':' . $config->get('ami_port', 5038));
 
 // ── 2. Signal handling (graceful shutdown on SIGTERM / SIGINT) ────────────────
 
 if (function_exists('pcntl_signal')) {
-    $shutdown = static function () use ($listener): void {
+    $shutdown = static function () use ($listener, $logger): void {
+        $logger->info('Shutdown signal received.');
         $listener->stop();
     };
     pcntl_signal(SIGTERM, $shutdown);
@@ -46,11 +54,17 @@ if (function_exists('pcntl_signal')) {
 
 // ── 3. Helper: POST an event to the CRM ──────────────────────────────────────
 
-$notify = static function (string $url, array $data) use ($http): void {
+$notify = static function (string $url, array $data) use ($http, $logger): void {
+    $logger->debug("CRM notify → {$url}");
     try {
-        $http->post($url, $data);
+        $result = $http->post($url, $data);
+        if ($result['success']) {
+            $logger->debug("CRM notify OK (HTTP {$result['status']})");
+        } else {
+            $logger->warning("CRM notify non-2xx (HTTP {$result['status']}) → {$url}");
+        }
     } catch (\Throwable $e) {
-        fwrite(STDERR, '[WARN] CRM notify failed: ' . $e->getMessage() . PHP_EOL);
+        $logger->error("CRM notify failed: {$e->getMessage()} → {$url}");
     }
 };
 
@@ -61,21 +75,24 @@ $notify = static function (string $url, array $data) use ($http): void {
  * AMI event: Newchannel
  * Maps to: POST <crm>/search_income_calls/<mobile>
  */
-$listener->on('Newchannel', static function (array $event) use ($notify, $crmBase, $incomingPath): void {
+$listener->on('Newchannel', static function (array $event) use ($notify, $logger, $crmBase, $incomingPath): void {
     $mobile = $event['CallerIDNum'] ?? $event['Exten'] ?? '';
     if ($mobile === '' || $mobile === 's') {
-        return;   // skip internal / unknown channels
+        return;
     }
 
-    $url = "{$crmBase}/{$incomingPath}/" . rawurlencode($mobile);
+    $channel = $event['Channel'] ?? '';
+    $state   = $event['ChannelStateDesc'] ?? '';
+    $logger->info("NEW CALL  mobile={$mobile}  channel={$channel}  state={$state}");
 
+    $url = "{$crmBase}/{$incomingPath}/" . rawurlencode($mobile);
     $notify($url, [
-        'event'      => 'Newchannel',
-        'mobile'     => $mobile,
-        'caller_id'  => $event['CallerIDName'] ?? $mobile,
-        'channel'    => $event['Channel']      ?? '',
-        'channel_state' => $event['ChannelStateDesc'] ?? '',
-        'timestamp'  => time(),
+        'event'         => 'Newchannel',
+        'mobile'        => $mobile,
+        'caller_id'     => $event['CallerIDName'] ?? $mobile,
+        'channel'       => $channel,
+        'channel_state' => $state,
+        'timestamp'     => time(),
     ]);
 });
 
@@ -84,63 +101,67 @@ $listener->on('Newchannel', static function (array $event) use ($notify, $crmBas
  * AMI event: Hangup
  * Maps to: POST <crm>/call_hangup/<mobile>
  */
-$listener->on('Hangup', static function (array $event) use ($notify, $crmBase, $hangupPath): void {
+$listener->on('Hangup', static function (array $event) use ($notify, $logger, $crmBase, $hangupPath): void {
     $mobile = $event['CallerIDNum'] ?? '';
     if ($mobile === '' || $mobile === 's') {
         return;
     }
 
-    $url = "{$crmBase}/{$hangupPath}/" . rawurlencode($mobile);
+    $channel  = $event['Channel']   ?? '';
+    $cause    = $event['Cause']     ?? '';
+    $causeTxt = $event['Cause-txt'] ?? '';
+    $logger->info("HANGUP    mobile={$mobile}  channel={$channel}  cause={$cause} ({$causeTxt})");
 
+    $url = "{$crmBase}/{$hangupPath}/" . rawurlencode($mobile);
     $notify($url, [
         'event'        => 'Hangup',
         'mobile'       => $mobile,
-        'caller_id'    => $event['CallerIDName']  ?? $mobile,
-        'channel'      => $event['Channel']       ?? '',
-        'cause'        => $event['Cause']         ?? '',
-        'cause_txt'    => $event['Cause-txt']     ?? '',
+        'caller_id'    => $event['CallerIDName'] ?? $mobile,
+        'channel'      => $channel,
+        'cause'        => $cause,
+        'cause_txt'    => $causeTxt,
         'timestamp'    => time(),
     ]);
 });
 
 /**
  * DIAL BEGIN — agent starts dialing the customer.
- * AMI event: DialBegin
  */
-$listener->on('DialBegin', static function (array $event): void {
+$listener->on('DialBegin', static function (array $event) use ($logger): void {
     $dest = $event['DestCallerIDNum'] ?? $event['Destination'] ?? '';
-    fwrite(STDOUT, "[dial_begin] channel={$event['Channel']} dest={$dest}" . PHP_EOL);
+    $logger->info("DIAL BEGIN  channel={$event['Channel']}  dest={$dest}");
 });
 
 /**
  * DIAL END — dial attempt result.
- * AMI event: DialEnd
  */
-$listener->on('DialEnd', static function (array $event): void {
-    fwrite(STDOUT, "[dial_end] channel={$event['Channel']} dialstatus={$event['DialStatus']}" . PHP_EOL);
+$listener->on('DialEnd', static function (array $event) use ($logger): void {
+    $status = $event['DialStatus'] ?? '';
+    $logger->info("DIAL END    channel={$event['Channel']}  status={$status}");
 });
 
 /**
  * HOLD / UNHOLD — agent places call on hold or resumes it.
  */
-$listener->on(['Hold', 'Unhold'], static function (array $event): void {
-    $type = strtolower($event['Event']);
-    fwrite(STDOUT, "[{$type}] channel={$event['Channel']}" . PHP_EOL);
+$listener->on(['Hold', 'Unhold'], static function (array $event) use ($logger): void {
+    $type = strtoupper($event['Event'] ?? '');
+    $logger->info("{$type}  channel={$event['Channel']}");
 });
 
 /**
  * BRIDGE ENTER — two channels are bridged (customer & agent connected).
- * AMI event: BridgeEnter
  */
-$listener->on('BridgeEnter', static function (array $event): void {
-    fwrite(STDOUT, "[bridge_enter] channel={$event['Channel']} bridge={$event['BridgeUniqueid']}" . PHP_EOL);
+$listener->on('BridgeEnter', static function (array $event) use ($logger): void {
+    $bridge = $event['BridgeUniqueid'] ?? '';
+    $logger->info("BRIDGE ENTER  channel={$event['Channel']}  bridge={$bridge}");
 });
 
 /**
- * BRIDGE LEAVE — a channel leaves the bridge (one party hung up).
+ * BRIDGE LEAVE — a channel leaves the bridge.
  */
-$listener->on('BridgeLeave', static function (array $event): void {
-    fwrite(STDOUT, "[bridge_leave] channel={$event['Channel']} bridge={$event['BridgeUniqueid']}" . PHP_EOL);
+$listener->on('BridgeLeave', static function (array $event) use ($logger): void {
+    $bridge = $event['BridgeUniqueid'] ?? '';
+    $logger->info("BRIDGE LEAVE  channel={$event['Channel']}  bridge={$bridge}");
 });
 
 // ── 5. Start (blocks until stop() is called or the process is killed) ─────────

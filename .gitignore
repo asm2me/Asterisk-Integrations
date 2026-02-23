@@ -15,5 +15,6 @@ config.local.php
 .DS_Store
 Thumbs.db
 
-# Logs
-*.log
+# Logs — keep the directory, ignore generated files
+/logs/*.log
+!/logs/.gitkeep

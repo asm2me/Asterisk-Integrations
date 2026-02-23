@@ -32,11 +32,12 @@ class AsteriskEventListener
     private int    $reconnectDelay;
     private string $username;
     private string $secret;
+    private Logger $logger;
 
     /** Stream read timeout in seconds (allows checking $running periodically). */
     private const READ_TIMEOUT = 5;
 
-    public function __construct(?Config $config = null)
+    public function __construct(?Config $config = null, ?Logger $logger = null)
     {
         $config               = $config ?? new Config();
         $this->host           = (string) $config->get('ami_host', $config->get('server'));
@@ -45,6 +46,7 @@ class AsteriskEventListener
         $this->reconnectDelay = (int)    $config->get('ami_reconnect_delay', 5);
         $this->username       = (string) $config->get('ami_username', '');
         $this->secret         = (string) $config->get('ami_secret', '');
+        $this->logger         = $logger ?? new Logger($config);
     }
 
     // -------------------------------------------------------------------------
@@ -82,7 +84,7 @@ class AsteriskEventListener
     public function start(): void
     {
         $this->running = true;
-        $this->log('Service starting.');
+        $this->logger->info('Service starting.');
 
         while ($this->running) {
             try {
@@ -92,21 +94,21 @@ class AsteriskEventListener
                     throw new \RuntimeException('AMI login failed.');
                 }
 
-                $this->log("Connected and authenticated to {$this->host}:{$this->port}");
+                $this->logger->info("Connected and authenticated to {$this->host}:{$this->port}");
                 $this->loop();
 
             } catch (\Throwable $e) {
-                $this->log('ERROR: ' . $e->getMessage());
+                $this->logger->error($e->getMessage());
                 $this->closeSocket();
 
                 if ($this->running) {
-                    $this->log("Reconnecting in {$this->reconnectDelay}s...");
+                    $this->logger->warning("Reconnecting in {$this->reconnectDelay}s...");
                     sleep($this->reconnectDelay);
                 }
             }
         }
 
-        $this->log('Service stopped.');
+        $this->logger->info('Service stopped.');
     }
 
     /**
@@ -115,7 +117,7 @@ class AsteriskEventListener
     public function stop(): void
     {
         $this->running = false;
-        $this->log('Stop requested.');
+        $this->logger->info('Stop requested.');
     }
 
     // -------------------------------------------------------------------------
@@ -182,6 +184,7 @@ class AsteriskEventListener
             if ($packet === null) {
                 // Stream timeout or EOF — EOF means Asterisk closed the connection.
                 if (feof($this->socket)) {
+                    $this->logger->warning('AMI connection closed by server.');
                     throw new \RuntimeException('AMI connection closed by server.');
                 }
                 // Timeout: no data — just loop again to check $running.
@@ -271,15 +274,14 @@ class AsteriskEventListener
     }
 
     // -------------------------------------------------------------------------
-    // Logging
+    // Logger access
     // -------------------------------------------------------------------------
 
-    private function log(string $message): void
+    /**
+     * Return the Logger instance (so service.php can share it for event handlers).
+     */
+    public function getLogger(): Logger
     {
-        $ts = date('Y-m-d H:i:s');
-        $line = "[{$ts}] {$message}" . PHP_EOL;
-
-        // Write to stdout so systemd/journald captures it.
-        fwrite(STDOUT, $line);
+        return $this->logger;
     }
 }
