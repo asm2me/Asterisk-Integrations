@@ -20,11 +20,34 @@ return [
     // The "source" parameter sent on every /connect/functions.php request.
     'source'   => 'Mani',
 
-    // ── HTTP client ──────────────────────────────────────────────────────────
+    // ── HTTP client (ViciDial) ────────────────────────────────────────────────
     // Total request timeout in seconds.
     'timeout'         => 30,
 
     // Connection timeout in seconds.
     'connect_timeout' => 10,
+
+    // ── Asterisk Manager Interface (AMI) ──────────────────────────────────────
+    // Host for the AMI socket (defaults to 'server' above if not set).
+    'ami_host' => '192.168.1.100',
+
+    // AMI TCP port (default 5038).
+    'ami_port' => 5038,
+
+    // AMI manager credentials (defined in /etc/asterisk/manager.conf).
+    'ami_username' => 'manager',
+    'ami_secret'   => 'manager_secret',
+
+    // ── Incoming call callback ────────────────────────────────────────────────
+    // Base URL of the CRM that Asterisk will POST call events to.
+    'callback_base_url' => 'https://172.16.0.200/jebaya/public',
+
+    // Path segment appended to callback_base_url for new / ringing calls.
+    // Full URL: <callback_base_url>/search_income_calls/<mobile>
+    'incoming_callback_path' => 'search_income_calls',
+
+    // Path segment appended to callback_base_url for hangup / call-ended events.
+    // Full URL: <callback_base_url>/call_hangup/<mobile>
+    'hangup_callback_path' => 'call_hangup',
 
 ];
