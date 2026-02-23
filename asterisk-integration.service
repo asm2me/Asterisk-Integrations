@@ -7,28 +7,37 @@ After=network.target
 
 [Service]
 Type=simple
-User=www-data
-Group=www-data
 
-# Absolute path to your deployment directory
+# ── User ──────────────────────────────────────────────────────────────────────
+# Run as root OR set to an existing user on this machine.
+# To find a valid user, run:  cut -d: -f1 /etc/passwd | sort
+# Common choices: root | asterisk | nobody
+User=root
+
+# ── Paths ─────────────────────────────────────────────────────────────────────
+# Absolute path to your deployment directory.
 WorkingDirectory=/var/www/asterisk-integrations
 
-# Run the daemon
-ExecStart=/usr/bin/php /var/www/asterisk-integrations/service.php
+# PHP binary path — find yours with:  which php   OR   whereis php
+# Common paths:
+#   /usr/bin/php
+#   /usr/local/bin/php
+#   /usr/bin/php8.1
+ExecStart=/usr/bin/env php /var/www/asterisk-integrations/service.php
 
-# Restart automatically on crash or non-zero exit
+# ── Restart policy ────────────────────────────────────────────────────────────
 Restart=always
 RestartSec=5
 
-# Give it 10 seconds to shut down gracefully before SIGKILL
+# Give it 10 seconds to shut down gracefully before SIGKILL.
 TimeoutStopSec=10
 
-# Capture stdout/stderr into journald
+# ── Logging ───────────────────────────────────────────────────────────────────
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=asterisk-integration
 
-# Harden the process
+# ── Hardening ─────────────────────────────────────────────────────────────────
 NoNewPrivileges=true
 PrivateTmp=true
 
