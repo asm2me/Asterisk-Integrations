@@ -38,6 +38,9 @@ return [
     'ami_username' => 'manager',
     'ami_secret'   => 'manager_secret',
 
+    // Seconds to wait before reconnecting after a dropped AMI connection.
+    'ami_reconnect_delay' => 5,
+
     // ── Incoming call callback ────────────────────────────────────────────────
     // Base URL of the CRM that Asterisk will POST call events to.
     'callback_base_url' => 'https://172.16.0.200/jebaya/public',

@@ -1,0 +1,36 @@
+[Unit]
+Description=Asterisk CRM Integration Service
+Documentation=https://github.com/your-org/asterisk-integrations
+After=network.target
+# If Asterisk runs on the same machine, wait for it too:
+# After=network.target asterisk.service
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+
+# Absolute path to your deployment directory
+WorkingDirectory=/var/www/asterisk-integrations
+
+# Run the daemon
+ExecStart=/usr/bin/php /var/www/asterisk-integrations/service.php
+
+# Restart automatically on crash or non-zero exit
+Restart=always
+RestartSec=5
+
+# Give it 10 seconds to shut down gracefully before SIGKILL
+TimeoutStopSec=10
+
+# Capture stdout/stderr into journald
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=asterisk-integration
+
+# Harden the process
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

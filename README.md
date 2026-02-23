@@ -8,6 +8,7 @@ A standalone PHP module for integrating with **Asterisk / ViciDial** telephony s
 
 - **ViciDial HTTP API** — agent login, outbound dial, hold, un-hold, hang-up
 - **Asterisk Manager Interface (AMI)** — native TCP socket client for direct Asterisk control
+- **Background event service** — persistent daemon that watches every AMI event and forwards them to the CRM in real time
 - **Inbound call callbacks** — parse and respond to new-call and hang-up events sent by Asterisk to your CRM
 - **Config-driven** — single `config.php` file controls every endpoint, credential, and timeout
 - **Zero dependencies** — requires only PHP ≥ 8.0 with `ext-curl` and `ext-json`
@@ -31,14 +32,17 @@ A standalone PHP module for integrating with **Asterisk / ViciDial** telephony s
 ```
 Asterisk-Integrations/
 ├── src/
-│   ├── Config.php               # Loads config.php and provides get()
-│   ├── ViciDialClient.php       # cURL HTTP client for ViciDial API calls
-│   ├── AsteriskIntegration.php  # ViciDial high-level actions (call, hold, hang-up)
-│   ├── AsteriskManager.php      # AMI TCP socket client
-│   └── CallbackHandler.php      # Inbound call & hangup event parser
-├── config.php                   # All configuration defaults
-├── example.php                  # ViciDial usage example
-├── example_ami.php              # AMI usage example
+│   ├── Config.php                  # Loads config.php and provides get()
+│   ├── ViciDialClient.php          # cURL HTTP client for ViciDial API calls
+│   ├── AsteriskIntegration.php     # ViciDial high-level actions (call, hold, hang-up)
+│   ├── AsteriskManager.php         # AMI TCP socket client (single action/response)
+│   ├── AsteriskEventListener.php   # Persistent AMI event listener (daemon)
+│   └── CallbackHandler.php         # Inbound call & hangup event parser
+├── service.php                     # Background service entry point
+├── asterisk-integration.service    # systemd unit file
+├── config.php                      # All configuration defaults
+├── example.php                     # ViciDial usage example
+├── example_ami.php                 # AMI usage example
 └── composer.json
 ```
 
@@ -311,6 +315,115 @@ $handler = new CallbackHandler(new Config());
 echo $handler->buildDialplanCurlLine();       // incoming-call line
 echo $handler->buildDialplanHangupCurlLine(); // hangup line
 ```
+
+---
+
+## Background Service
+
+`service.php` is a long-running daemon that opens a **persistent AMI connection** and
+listens for every Asterisk event in real time — no dialplan curl lines needed.
+
+### Events watched
+
+| AMI Event | Action |
+|---|---|
+| `Newchannel` | POST to `search_income_calls/{mobile}` |
+| `Hangup` | POST to `call_hangup/{mobile}` |
+| `DialBegin` / `DialEnd` | logged to stdout |
+| `Hold` / `Unhold` | logged to stdout |
+| `BridgeEnter` / `BridgeLeave` | logged to stdout |
+
+### Run manually (test)
+
+```bash
+php service.php
+```
+
+---
+
+### Install as a systemd service (Linux)
+
+> Run all commands as **root** or with `sudo`.
+
+**Step 1 — Deploy the project**
+
+```bash
+# Copy project to the server
+cp -r /path/to/Asterisk-Integrations /var/www/asterisk-integrations
+
+# Set ownership
+chown -R www-data:www-data /var/www/asterisk-integrations
+```
+
+**Step 2 — Edit config.php**
+
+```bash
+nano /var/www/asterisk-integrations/config.php
+```
+
+Set your real values:
+
+```php
+'server'            => '192.168.1.100',   // Asterisk server IP
+'ami_username'      => 'manager',
+'ami_secret'        => 'your_secret',
+'callback_base_url' => 'https://172.16.0.200/jebaya/public',
+```
+
+**Step 3 — Install the unit file**
+
+```bash
+cp /var/www/asterisk-integrations/asterisk-integration.service \
+   /etc/systemd/system/asterisk-integration.service
+```
+
+**Step 4 — Enable and start**
+
+```bash
+# Reload systemd so it sees the new unit
+systemctl daemon-reload
+
+# Start automatically on boot
+systemctl enable asterisk-integration
+
+# Start now
+systemctl start asterisk-integration
+```
+
+**Step 5 — Verify**
+
+```bash
+# Check current status
+systemctl status asterisk-integration
+
+# Watch live logs
+journalctl -u asterisk-integration -f
+```
+
+### Service management commands
+
+```bash
+systemctl start   asterisk-integration   # start
+systemctl stop    asterisk-integration   # stop (graceful)
+systemctl restart asterisk-integration   # restart
+systemctl status  asterisk-integration   # show status + last 10 log lines
+journalctl -u asterisk-integration -f    # tail logs live
+journalctl -u asterisk-integration --since "1 hour ago"   # last hour
+```
+
+### extensions.conf changes
+
+With the background service running, the dialplan no longer needs the `System(curl …)` lines.
+You can simplify your `[incoming]` context to:
+
+```ini
+[incoming]
+exten => _X.,1,NoOp(Incoming call ${CALLERID(num)})
+same  => n,Dial(SIP/${EXTEN},30)
+same  => n,Hangup()
+```
+
+The service receives `Newchannel` and `Hangup` events directly from AMI — no dialplan changes required.
 
 ---
 
